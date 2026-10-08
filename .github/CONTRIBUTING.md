@@ -115,7 +115,6 @@ refactor: ready_list 정렬 비교 함수 분리
 ## 6. 테스트 확인 방법
 
 ```bash
-# 예: threads 프로젝트
 cd threads
 make clean && make
 cd build
