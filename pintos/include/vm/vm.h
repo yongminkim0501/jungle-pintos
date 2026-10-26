@@ -98,9 +98,7 @@ struct vm_entry{
 };
 
 struct supplemental_page_table {
-	size_t bucket; // hash_list의 크기
 	struct hash * hash_list;
-	struct hash_elem * elem_cnt;
 };
 
 #include "threads/thread.h"
