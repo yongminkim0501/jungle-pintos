@@ -139,8 +139,24 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
 	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
 	struct page *page = spt_find_page(spt, addr);
-	/* TODO: Validate the fault */
-	/* TODO: Your code goes here */
+	
+	// is_kernel_vddd는 KERN_BASE보다 주소값이 클 때, 주소검사
+	if (addr == NULL || is_kernel_vadd(addr))
+		return false;
+
+	// not_present는 이 폴트가 페이지가 아예 없어서 난것인가
+	// 이미 올라와 있는 페이지에서 폴트 권한 위반	
+	if (!not_present)
+		return false;
+	
+	// spt에서 찾기 	
+	if (page == NULL)
+		return false;
+
+	// write는 왜 있는지 모르겠음
+	// 새 페이지때 쓰기 권한, 읽기 전용인데 쓰면 안됨
+	if (write)
+		return false;
 
 	return vm_do_claim_page (page);
 }
@@ -162,7 +178,7 @@ vm_claim_page (void *va UNUSED) {
 	return vm_do_claim_page (page);
 }
 
-/* Claim the PAGE and set up the mmu. */
+/* PAGE를 할당하고 mmu를 설정합니다. */
 static bool
 vm_do_claim_page (struct page *page) {
 	struct frame *frame = vm_get_frame ();
@@ -195,5 +211,7 @@ void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
+	// buckets에 달린 페이지를 삭제
+	// buckets 해제는 hash에서 페이지 해제는 hash_destructor에서 
 	hash_clear (&spt->spt_hash, hash_destructor);
 }
