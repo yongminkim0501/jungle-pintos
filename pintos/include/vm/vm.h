@@ -2,6 +2,7 @@
 #define VM_VM_H
 #include <stdbool.h>
 #include "threads/palloc.h"
+#include "hash.h"
 
 enum vm_type {
 	/* page not initialized */
@@ -44,6 +45,8 @@ struct page {
 	const struct page_operations *operations;
 	void *va;              /* Address in terms of user space */
 	struct frame *frame;   /* Back reference for frame */
+	int key; 
+	struct hash_elem *elem; //페이지를 해시테이블에 넣기 위해 해시 테이블 elem 을 넣는다.
 
 	/* Your implementation */
 
@@ -58,6 +61,7 @@ struct page {
 #endif
 	};
 };
+
 
 /* The representation of "frame" */
 struct frame {
@@ -84,7 +88,17 @@ struct page_operations {
 /* Representation of current process's memory space.
  * We don't want to force you to obey any specific design for this struct.
  * All designs up to you for this. */
-struct supplemental_page_table {
+// struct hash_tabel{ //각각의 페이지 테이블인가? 
+// 	/* 
+// 	key 를 어떻게 하지? key가 char 인지 int인지 어캐 알지 하;; 
+// 	key가 hash 아닌가? 테이블은? 그러면 value 값을 어떻게 하는데! ㅠㅠ
+// 	각각의 페이지 테이블로 있어야 하는데 그러면 뭐 말록으로 할당해? 그러면 어떻게 찾는데?
+// 	*/
+// 	struct hash;
+// 	struct hash_elem;
+// };
+struct supplemental_page_table { //spt 테이블
+	struct hash *hash;//해시 테이블
 };
 
 #include "threads/thread.h"

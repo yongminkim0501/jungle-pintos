@@ -4,6 +4,8 @@
 #include "vm/vm.h"
 #include "vm/inspect.h"
 
+
+
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
 void
@@ -71,11 +73,18 @@ spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 
 /* Insert PAGE into spt with validation. */
 bool
-spt_insert_page (struct supplemental_page_table *spt UNUSED,
+spt_insert_page (struct supplemental_page_table *spt UNUSED, //인설트 담당
 		struct page *page UNUSED) {
-	int succ = false;
+	int succ = false; //succ 란 성공 했는지 아닌지를 하는 것
 	/* TODO: Fill this function. */
-
+	//일단 spt 안에 있는 리스트 안에 page를 넣어! 
+	//리턴값으로 주소를 리턴해!
+	const char* test = malloc(hash_size(page->elem));
+	list_push_back(spt->hash->buckets,hash_insert(spt->hash,page->elem));//이러면 버킷 안에 들어가게 된다.
+	if(test = NULL){ //일단 이런 느낌으로만 만들기 위한 테스트
+		succ = false;
+		free(test);
+	}
 	return succ;
 }
 
@@ -167,7 +176,7 @@ vm_do_claim_page (struct page *page) {
 	page->frame = frame;
 
 	/* TODO: Insert page table entry to map page's VA to frame's PA. */
-
+	
 	return swap_in (page, frame->kva);
 }
 
