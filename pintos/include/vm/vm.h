@@ -50,7 +50,7 @@ struct page {
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
 	union {
-		struct uninit_page uninit;
+		struct uninitdd_page uninit;
 		struct anon_page anon;
 		struct file_page file;
 #ifdef VM
@@ -88,6 +88,15 @@ struct page_operations {
 /* Representation of current process's memory space.
  * We don't want to force you to obey any specific design for this struct.
  * All designs up to you for this. */
+struct vm_entry{
+	size_t VM_BIN;
+	uint8_t vaddr;
+	uint32_t zero_bytes;
+	uint32_t read_bytes;
+	off_t offset;
+	struct file *file;
+};
+
 struct supplemental_page_table {
 	struct hash * hash_list;
 };
