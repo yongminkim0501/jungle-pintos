@@ -4,7 +4,9 @@
 #include "vm/vm.h"
 #include "vm/inspect.h"
 #include "lib/kernel/hash.h"
-
+#include "filesys/file.h"
+#include "vm/uninit.h"
+#include "filesys/page_cache.h"
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
 void
@@ -38,9 +40,9 @@ static struct frame *vm_get_victim (void);
 static bool vm_do_claim_page (struct page *page);
 static struct frame *vm_evict_frame (void);
 
-/* Create the pending page object with initializer. If you want to create a
- * page, do not create it directly and make it through this function or
- * `vm_alloc_page`. */
+/* 초기화자를 사용하여 대기 중인 페이지 객체를 생성합니다. 생성하고 싶다면
+ * 페이지를 직접 생성하지 말고 이 함수를 통해 생성하세요
+ * `vm_alloc_page`.*/
 bool
 vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		vm_initializer *init, void *aux) {
@@ -51,11 +53,20 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 
 	/* Check wheter the upage is already occupied or not. */
 	if (spt_find_page (spt, upage) == NULL) {
-		/* TODO: Create the page, fetch the initialier according to the VM type,
-		 * TODO: and then create "uninit" page struct by calling uninit_new. You
-		 * TODO: should modify the field after calling the uninit_new. */
-
-		/* TODO: Insert the page into the spt. */
+		/* 할 일: 페이지 생성, VM 타입에 따라 초기화값 가져오기,
+		 * TODO: 그 다음 uninit_new를 호출하여 "uninit" 페이지 구조체를 생성합니다. 너
+		 * TODO: uninit_new 호출 후 필드를 수정해야 합니다. */
+		/* 할 일: 페이지를 spt에 삽입한다. */
+		struct page* new_page;
+		if (type == VM_ANON){ // 이 부분 임시코드라 수정 필요 -> 모든 상황마다 uninit_new를 해야하는 지는 모르겠음
+			uninit_new(new_page, upage, init, VM_ANON , NULL, anon_initializer);
+		} 
+		else if (type == VM_FILE){
+			uninit_new(new_page, upage,  init, VM_FILE, NULL, file_backed_initializer);
+		}
+		else if (type == VM_PAGE_CACHE){
+			uninit_new(new_page, upage,  init, VM_PAGE_CACHE, NULL, page_cache_initializer);
+		}
 	}
 err:
 	return false;
@@ -66,6 +77,9 @@ struct page *
 spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 	struct page *page = NULL;
 	/* TODO: Fill this function. */
+	// spt 전체 리스트를 순회
+	// va를 통하여 해당 값과 맞는 값을 찾으면 page 타입으로 반환
+	// 만약 error 발생 하면 null을 리턴
 
 	return page;
 }
@@ -76,6 +90,9 @@ spt_insert_page (struct supplemental_page_table *spt UNUSED,
 		struct page *page UNUSED) {
 	int succ = false;
 	/* TODO: Fill this function. */
+	// hash_insert를 통하여 spt에 페이지 삽입
+	// hash_insert->hash_elem 반환 
+	// *hash_insert (struct hash *, struct hash_elem *)
 
 	return succ;
 }
@@ -83,6 +100,9 @@ spt_insert_page (struct supplemental_page_table *spt UNUSED,
 void
 spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
 	vm_dealloc_page (page);
+	// hash_delete(struct hash *, struct hash_elem *)
+
+
 	return true;
 }
 
@@ -163,28 +183,7 @@ vm_claim_page (void *va UNUSED) {
 static bool
 vm_do_claim_page (struct page *page) {
 	struct frame *frame = vm_get_frame ();
-	/*
-	claim의 의미는 할당
-	struct frame {
-		void *kva;
-		struct page *page;
-	};
 
-	struct page {
-		const struct page_operations *operations;
-		void *va;              
-		struct frame *frame;   
-
-		union {
-			struct uninit_page uninit;
-			struct anon_page anon;
-			struct file_page file;
-	#ifdef EFILESYS
-			struct page_cache page_cache;
-	#endif
-		};
-	};
-	*/
 	/* Set links */
 	frame->page = page;
 	page->frame = frame;
