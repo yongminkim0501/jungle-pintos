@@ -88,6 +88,8 @@ void hash_first (struct hash_iterator *, struct hash *);
 struct hash_elem *hash_next (struct hash_iterator *);
 struct hash_elem *hash_cur (struct hash_iterator *);
 
+bool *cmp_hash_elem (const struct hash_elem *e1, const struct hash_elem *e2, void *aux);
+
 /* Information. */
 size_t hash_size (struct hash *);
 bool hash_empty (struct hash *);

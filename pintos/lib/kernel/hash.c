@@ -392,3 +392,11 @@ remove_elem (struct hash *h, struct hash_elem *e) {
 	list_remove (&e->list_elem);
 }
 
+bool
+cmp_hash_elem (const struct hash_elem *e1, const struct hash_elem *e2, void *aux UNUSED){
+	void *va1 = list_entry(&e1->list_elem, struct page, elem)->va;
+	void *va2 = list_entry(&e2->list_elem, struct page, elem)->va;
+
+	if (va1 < va2) return true;
+	return false;
+}

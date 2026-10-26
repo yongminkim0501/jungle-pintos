@@ -53,6 +53,10 @@ struct page {
 		struct uninit_page uninit;
 		struct anon_page anon;
 		struct file_page file;
+#ifdef VM
+	struct hash_elem *elem;
+#endif
+
 #ifdef EFILESYS
 		struct page_cache page_cache;
 #endif
@@ -85,6 +89,7 @@ struct page_operations {
  * We don't want to force you to obey any specific design for this struct.
  * All designs up to you for this. */
 struct supplemental_page_table {
+	struct hash * hash_list;
 };
 
 #include "threads/thread.h"
