@@ -137,16 +137,6 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	struct page *page = NULL;
 	/* TODO: Validate the fault */
 	/* TODO: Your code goes here */
-	/*
-	해당 함수 호출 위치 -> page_fault 중 vm 상황일 때 사용
-	해당 함수가 True면 return ;
-
-	만약 False라면, page_fault_cnt++; 하고 kill -> 아예 죽여버림 그러면 page_fault_cnt를 왜 높여야 하지 
-	kill함수 -> 사용자 프로세스에 의해 발생
-	가상 메모리 (페이지 폴트) 지금은 일단 죽임
-	그리고 인터럽트 프레임의 코드 세그먼트 값은 어디인지 알려줌
-	
-	*/
 	return vm_do_claim_page (page);
 	// vm_do_claim_page 함수
 	// : 페이지의 VA를 프레임의 PA에 매핑하는 페이지 테이블 항목을 삽입하세요.
@@ -211,7 +201,7 @@ supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
 	// 보조 페이지 테이블을 초기화
 	// 보조 페이지 테이블에 사용할 데이터 구조를 선택할 수 있음
 	// __do_fork 에서 호출됨 userprog/process.c
-	if (!hash_init(thread_current()->spt->hash_list, hash_bytes, cmp_hash_elem, NULL)){
+	if (!hash_init(&spt->hash_list, hash_bytes, cmp_page_less, NULL)){
 		return ;
 	}
 }
