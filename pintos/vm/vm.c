@@ -77,6 +77,7 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		else if (type == VM_PAGE_CACHE){
 			uninit_new(new_page, upage,  init, VM_PAGE_CACHE, aux, page_cache_initializer);
 		}
+		
 		spt_insert_page(spt, new_page);
 		return true;
 	}
@@ -94,7 +95,18 @@ spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 	// spt 전체 리스트를 순회
 	// va를 통하여 해당 값과 맞는 값을 찾으면 page 타입으로 반환
 	// 만약 error 발생 하면 null을 리턴
-	
+
+	// 여기 반복문 -> 이 부분 내장되어있는 함수가 있다고 함
+	for (struct hash_elem *start; true/*해시여서 무조건 하나는 걸린다?*/;start = hash_next(start)){
+		if ((hash_find(spt, hash_bytes(va, sizeof(uint64_t))) == start)){
+			break;
+		}
+	}
+
+
+	if (hash_bytes(va, sizeof(uint64_t)) == spt->hash_list->hash){
+		return page;
+	}
 	
 
 	return page;
@@ -109,7 +121,6 @@ spt_insert_page (struct supplemental_page_table *spt UNUSED,
 	// hash_insert를 통하여 spt에 페이지 삽입
 	// hash_insert->hash_elem 반환 
 	// *hash_insert (struct hash *, struct hash_elem *)
-
 	return succ;
 }
 

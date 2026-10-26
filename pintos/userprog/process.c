@@ -797,7 +797,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		struct vm_entry *v_entry = vm_entry_init(count, kpage, zero_bytes, read_bytes, ofs, file);
 		count ++;
 
-		// init에는 뭐를 넣어야 하지 ??? / 
+		// init에는 뭐를 넣어야 하지 ??? -> frame 쪽 initialize 라고 듣기는 했는데 애매함
 		if (!vm_alloc_page_with_initializer(VM_ANON, upage, writable, init, v_entry)){ // 일단 v_entry를 어디 넣어야 하는지 정확히 모르겠어서 aux에 집어넣음
 			return false;
 		}
