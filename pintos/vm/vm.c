@@ -94,8 +94,8 @@ spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 	// spt 전체 리스트를 순회
 	// va를 통하여 해당 값과 맞는 값을 찾으면 page 타입으로 반환
 	// 만약 error 발생 하면 null을 리턴
-
-
+	
+	
 
 	return page;
 }
