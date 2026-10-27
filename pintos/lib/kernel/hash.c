@@ -391,13 +391,3 @@ remove_elem (struct hash *h, struct hash_elem *e) {
 	h->elem_cnt--;
 	list_remove (&e->list_elem);
 }
-
-bool 
-cmp_page_less(const struct hash_elem *elem1, const struct hash_elem *elem2, void *aux UNUSED){
-    const struct page *a = hash_entry(elem1, struct page, elem);
-    const struct page *b = hash_entry(elem2, struct page, elem);
-
-	if (a->va < b->va) return true;
-	return false
-	
-}
