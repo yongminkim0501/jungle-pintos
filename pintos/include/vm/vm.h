@@ -46,8 +46,6 @@ struct page {
 	void *va;              /* 가상주소 Address in terms of user space */
 	struct frame *frame;   /* Back reference for frame */
 	bool rw;
-	/* Your implementation */
-	struct hash_elem elem;
 	
 	/* Your implementation */
 	struct hash_elem hash_elem;	// spt 해시테이블 연결고리 
