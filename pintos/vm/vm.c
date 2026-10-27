@@ -303,3 +303,13 @@ supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	// buckets 해제는 hash에서 페이지 해제는 hash_destructor에서 
 	hash_clear (&spt->spt_hash, hash_destructor);
 }
+
+bool 
+page_less(const struct hash_elem *elem1, const struct hash_elem *elem2, void *aux UNUSED){
+    const struct page *a = hash_entry(elem1, struct page, elem);
+    const struct page *b = hash_entry(elem2, struct page, elem);
+
+	if (a->va < b->va) return true;
+	return false;
+	
+}
