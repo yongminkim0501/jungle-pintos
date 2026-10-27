@@ -105,9 +105,10 @@ spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 	// 만약 error 발생 하면 null을 리턴
 
 	// 여기 반복문 -> 이 부분 내장되어있는 함수가 있다고 함
-	page1->va = va;
+	page1->va = pg_round_down(va);
 	// hash_elem
-	struct hash_elem *finded_elem = hash_find(spt->hash_list, page1->elem);
+	struct hash_elem h_elem = page1->elem;
+	struct hash_elem *finded_elem = hash_find(spt->hash_list, &h_elem);
 	if(finded_elem != NULL) page1 = hash_entry(finded_elem, struct page, elem);
 	return page1;
 }
@@ -121,12 +122,13 @@ spt_insert_page (struct supplemental_page_table *spt UNUSED, //인설트 담당
 	// hash_insert를 통하여 spt에 페이지 삽입
 	// hash_insert->hash_elem 반환 
 	// *hash_insert (struct hash *, struct hash_elem *)
+
 	return succ;
 }
 
 void
 spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
-	hash_delete(&spt->spt_hash, &page->hash_elem);
+	hash_delete(&spt->hash_list, &page->hash_elem);
 	vm_dealloc_page (page);
 	return true;
 }
@@ -172,13 +174,15 @@ vm_get_frame (void) {
 	- 성공적으로 가져오면 프레임을 할당하고 멤버를 초기화한 다. 음. 바. 화
 	- 페이지 할당 실패 시 해당 케이스를 PANIC("todo")로 표시 
 	*/
-	void *kva = palloc_get_page(PAL_USER); // 사용자 풀에서 페이지 할당
-	if (kva == NULL){
+	
+	frame -> kva = palloc_get_page(PAL_USER); // 사용자 풀에서 페이지 할당
+	memset(frame->page, 0, sizeof(struct page));
+
+
+	if (frame->kva == NULL){
 		PANIC("todo");
 	}
 	frame = malloc(sizeof(struct frame));
-	frame->kva = kva;
-
 
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
@@ -282,7 +286,7 @@ page_hash (const struct hash_elem *p_, void *aux UNUSED) {
 /* Initialize new supplemental page table */
 void
 supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
-		if(!hash_init(&spt->spt_hash, page_hash, page_less, NULL)){
+		if(!hash_init(&spt->hash_list, page_hash, page_less, NULL)){
 			return ;
 		}
 }
@@ -301,7 +305,7 @@ supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	 * TODO: writeback all the modified contents to the storage. */
 	// buckets에 달린 페이지를 삭제
 	// buckets 해제는 hash에서 페이지 해제는 hash_destructor에서 
-	hash_clear (&spt->spt_hash, hash_destructor);
+	hash_clear (&spt->hash_list, hash_destructor);
 }
 
 bool 
