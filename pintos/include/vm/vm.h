@@ -45,17 +45,22 @@ struct page {
 	const struct page_operations *operations;
 	void *va;              /* 가상주소 Address in terms of user space */
 	struct frame *frame;   /* Back reference for frame */
-	int key; 
-	struct hash_elem *elem; //페이지를 해시테이블에 넣기 위해 해시 테이블 elem 을 넣는다.
-
+	bool rw;
+	/* Your implementation */
+	struct hash_elem elem;
+	
 	/* Your implementation */
 	struct hash_elem hash_elem;	// spt 해시테이블 연결고리 
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
 	union {
-		struct uninit_page uninit;
+		struct uninitdd_page uninit;
 		struct anon_page anon;
 		struct file_page file;
+#ifdef VM
+	
+#endif
+
 #ifdef EFILESYS
 		struct page_cache page_cache;
 #endif
@@ -67,6 +72,7 @@ struct page {
 struct frame {
 	void *kva;
 	struct page *page;
+	struct list_elem frame_elem;
 };
 
 /* The function table for page operations.
@@ -88,9 +94,17 @@ struct page_operations {
 /* Representation of current process's memory space.
  * We don't want to force you to obey any specific design for this struct.
  * All designs up to you for this. */
-// 비어 있는 구조체를 채움 - spt의 빈 상자를 만든거임
+struct vm_entry{
+	size_t VM_BIN;
+	uint8_t vaddr;
+	uint32_t zero_bytes;
+	uint32_t read_bytes;
+	off_t offset;
+	struct file *file;
+};
+
 struct supplemental_page_table {
-	struct hash spt_hash;
+	struct hash * hash_list;
 };
 
 #include "threads/thread.h"

@@ -22,13 +22,14 @@
 #include "threads/synch.h"
 #include "lib/kernel/list.h"
 #include "threads/malloc.h"
-
+#include "vm/vm.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
 
 #define USERPROG 1
 
+static bool lazy_load_segment (struct page *page, void *aux);
 static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
@@ -816,6 +817,21 @@ static bool install_page (void *upage, void *kpage, bool writable);
  *
  * Return true if successful, false if a memory allocation error
  * or disk read error occurs. */
+
+static struct vm_entry*
+vm_entry_init(size_t VM_BIN, uint8_t vaddr, uint32_t zero_bytes,
+	uint32_t read_bytes, off_t offset, struct file *v_file
+){
+	struct vm_entry *v_entry;
+	v_entry -> VM_BIN = VM_BIN; // 여기 뭐 넣어야 하는지 모르겠음
+	v_entry -> vaddr = vaddr;
+	v_entry -> zero_bytes = zero_bytes;
+	v_entry -> read_bytes = read_bytes;
+	v_entry -> offset = offset;
+	v_entry -> file = v_file;
+	return v_entry;
+}
+
 static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
@@ -823,6 +839,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 	ASSERT (pg_ofs (upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
 
+	int count = 0;
 	file_seek (file, ofs);
 	while (read_bytes > 0 || zero_bytes > 0) {
 		/* Do calculate how to fill this page.
@@ -843,6 +860,14 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		}
 		memset (kpage + page_read_bytes, 0, page_zero_bytes);
 
+		struct vm_entry *v_entry = vm_entry_init(count, kpage, zero_bytes, read_bytes, ofs, file);
+		count ++;
+
+		// init에는 뭐를 넣어야 하지 ??? -> frame 쪽 initialize 라고 듣기는 했는데 애매함
+		if (!vm_alloc_page_with_initializer(VM_ANON, upage, writable, lazy_load_segment, v_entry)){ // 일단 v_entry를 어디 넣어야 하는지 정확히 모르겠어서 aux에 집어넣음
+			return false;
+		}
+		
 		/* Add the page to the process's address space. */
 		if (!install_page (upage, kpage, writable)) {
 			printf("fail\n");
