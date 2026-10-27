@@ -119,9 +119,21 @@ spt_insert_page (struct supplemental_page_table *spt UNUSED, //인설트 담당
 		struct page *page UNUSED) {
 	int succ = false; //succ 란 성공 했는지 아닌지를 하는 것
 	/* TODO: Fill this function. */
-	// hash_insert를 통하여 spt에 페이지 삽입
-	// hash_insert->hash_elem 반환 
-	// *hash_insert (struct hash *, struct hash_elem *)
+	//일단 spt 안에 있는 리스트 안에 page를 넣어! 
+	//리턴값으로 주소를 리턴해!
+	// hash(va) % bucket_cnt
+	//key 가 주소 고 vlaue가 페이지인가? 그래서 주소를 주면 페이지를 가져오는거지 get 하면 아따 좋구먼! 
+	//맞네 주소는 16진수 니까 그냥 %8 하면 되구나! 
+	//인덱스 0부터 7까지 하고 key를 주소로 하면 될꺼 같은데? 
+	//주소는 VM 주소로 해야할듯? SPT 가 물리주소로 하는게 아닌거 같으니까? 
+
+
+	
+	struct hash_elem *elem = hash_insert(spt->hash,page->hash_elem);
+	if (elem==NULL){//만약 없어서 새로 넣었다면 NULL 반환 
+		//이미 있다면 그냥 그요소를 반환
+		succ = true;
+	}
 
 	return succ;
 }
