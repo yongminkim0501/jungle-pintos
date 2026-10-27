@@ -52,9 +52,9 @@ static uint64_t page_hash (const struct hash_elem *e, void *aux);
 static bool page_less (const struct hash_elem *a, const struct hash_elem *b, void *aux);
 static void hash_destructor  (struct hash_elem *e, void *aux);
 
-/* Create the pending page object with initializer. If you want to create a
- * page, do not create it directly and make it through this function or
- * `vm_alloc_page`. */
+/* 초기화자를 사용하여 대기 중인 페이지 객체를 생성합니다. 생성하고 싶다면
+ * 페이지를 직접 생성하지 말고 이 함수를 통해 생성하세요
+ * `vm_alloc_page`.*/
 bool
 vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		vm_initializer *init, void *aux) {
@@ -75,16 +75,14 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		 * TODO: 그 다음 uninit_new를 호출하여 "uninit" 페이지 구조체를 생성합니다. 너
 		 * TODO: uninit_new 호출 후 필드를 수정해야 합니다. */
 		/* 할 일: 페이지를 spt에 삽입한다. */
-		struct page* new_page;
+		struct page* new_page = calloc(1, sizeof(struct page));
 		if (type == VM_ANON){ // 이 부분 임시코드라 수정 필요 -> 모든 상황마다 uninit_new를 해야하는 지는 모르겠음
 			uninit_new(new_page, upage, init, VM_ANON , aux, anon_initializer); 
-		} 
+		}
 		else if (type == VM_FILE){
-			uninit_new(new_page, upage,  init, VM_FILE, aux, file_backed_initializer);
+			uninit_new(new_page, upage, init, VM_FILE, aux, file_backed_initializer);
 		}
-		else if (type == VM_PAGE_CACHE){
-			uninit_new(new_page, upage,  init, VM_PAGE_CACHE, aux, page_cache_initializer);
-		}
+		new_page->rw = writable;
 		
 		spt_insert_page(spt, new_page);
 		return true;
@@ -138,7 +136,6 @@ static struct frame *
 vm_get_victim (void) {
 	struct frame *victim = NULL;
 	 /* TODO: The policy for eviction is up to you. */
-
 	return victim;
 }
 
