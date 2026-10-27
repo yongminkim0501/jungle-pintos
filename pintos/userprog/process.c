@@ -955,6 +955,8 @@ lazy_load_segment (struct page *page, void *aux) {
  *
  * Return true if successful, false if a memory allocation error
  * or disk read error occurs. */
+// 가상 페이지에 담을 파일 포인터, 파일 오프셋, 가상 페이지를 적재할 가상 주소(upage)
+// 페이지에서 읽어야할 바이트, 0으로 패딩해줘야 할 바이트
 static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
@@ -963,14 +965,14 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 	ASSERT (ofs % PGSIZE == 0);
 
 	while (read_bytes > 0 || zero_bytes > 0) {
-		/* Do calculate how to fill this page.
-		 * We will read PAGE_READ_BYTES bytes from FILE
-		 * and zero the final PAGE_ZERO_BYTES bytes. */
-		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+		/* 이 페이지를 어떻게 채울지 계산합니다.
+         * FILE에서 PAGE_READ_BYTES 바이트를 읽고
+         * 남은 PAGE_ZERO_BYTES 바이트는 0으로 초기화합니다. */
+		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE; // 4kb까지만 읽어라
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
 		/* TODO: Set up aux to pass information to the lazy_load_segment. */
-		void *aux = NULL;
+		void *aux = NULL; // 전달 인자
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
 					writable, lazy_load_segment, aux))
 			return false;

@@ -52,9 +52,8 @@ static uint64_t page_hash (const struct hash_elem *e, void *aux);
 static bool page_less (const struct hash_elem *a, const struct hash_elem *b, void *aux);
 static void hash_destructor  (struct hash_elem *e, void *aux);
 
-/* 초기화자를 사용하여 대기 중인 페이지 객체를 생성합니다. 생성하고 싶다면
- * 페이지를 직접 생성하지 말고 이 함수를 통해 생성하세요
- * `vm_alloc_page`.*/
+/* 초기화 함수와 함께 대기 중인 페이지 객체를 생성합니다. 페이지를 직접 생성하지 말고,
+ * 반드시 이 함수나 vm_alloc_page를 통해 생성하세요. -> 대기 중인 페이지 객체는 uninit page를 말함 */
 bool
 vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		vm_initializer *init, void *aux) {
@@ -73,7 +72,9 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 	if (spt_find_page (spt, upage) == NULL) {
 		/* 할 일: 페이지 생성, VM 타입에 따라 초기화값 가져오기,
 		 * TODO: 그 다음 uninit_new를 호출하여 "uninit" 페이지 구조체를 생성합니다. 너
-		 * TODO: uninit_new 호출 후 필드를 수정해야 합니다. */
+		 * TODO: uninit_new 호출 후 필드를 수정해야 합니다. 
+		 * uninit_new를 사용하면 미초기화 페이지를 만들 수 있음 
+		 * 미초기화 페이지에 매핑되어야 할 물리 프레임의 정보를 저장하고 이를 spt에 등록한다고 추상화*/
 		/* 할 일: 페이지를 spt에 삽입한다. */
 		struct page* new_page = calloc(1, sizeof(struct page));
 		if (type == VM_ANON){ // 이 부분 임시코드라 수정 필요 -> 모든 상황마다 uninit_new를 해야하는 지는 모르겠음
@@ -105,7 +106,7 @@ spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 	// 여기 반복문 -> 이 부분 내장되어있는 함수가 있다고 함
 	page1->va = pg_round_down(va);
 	// hash_elem
-	struct hash_elem h_elem = page1->elem;
+	struct hash_elem h_elem = page1->hash_elem;
 	struct hash_elem *finded_elem = hash_find(spt->hash_list, &h_elem);
 	if(finded_elem != NULL) page1 = hash_entry(finded_elem, struct page, elem);
 	return page1;
@@ -117,9 +118,21 @@ spt_insert_page (struct supplemental_page_table *spt UNUSED, //인설트 담당
 		struct page *page UNUSED) {
 	int succ = false; //succ 란 성공 했는지 아닌지를 하는 것
 	/* TODO: Fill this function. */
-	// hash_insert를 통하여 spt에 페이지 삽입
-	// hash_insert->hash_elem 반환 
-	// *hash_insert (struct hash *, struct hash_elem *)
+	//일단 spt 안에 있는 리스트 안에 page를 넣어! 
+	//리턴값으로 주소를 리턴해!
+	// hash(va) % bucket_cnt
+	//key 가 주소 고 vlaue가 페이지인가? 그래서 주소를 주면 페이지를 가져오는거지 get 하면 아따 좋구먼! 
+	//맞네 주소는 16진수 니까 그냥 %8 하면 되구나! 
+	//인덱스 0부터 7까지 하고 key를 주소로 하면 될꺼 같은데? 
+	//주소는 VM 주소로 해야할듯? SPT 가 물리주소로 하는게 아닌거 같으니까? 
+
+
+	
+	struct hash_elem *elem = hash_insert(spt->hash,page->hash_elem);
+	if (elem==NULL){//만약 없어서 새로 넣었다면 NULL 반환 
+		//이미 있다면 그냥 그요소를 반환
+		succ = true;
+	}
 
 	return succ;
 }
@@ -140,7 +153,9 @@ vm_get_victim (void) {
 }
 
 /* Evict one page and return the corresponding frame.
- * Return NULL on error.*/
+ * Return NULL on error.
+ * 페이지 교체 알고리즘
+*/
 static struct frame *
 vm_evict_frame (void) {
 	struct frame *victim UNUSED = vm_get_victim ();
@@ -162,7 +177,6 @@ vm_evict_frame (void) {
 
 static struct frame *
 vm_get_frame (void) {
-	struct frame *frame = NULL;
 	/* TODO: Fill this function. */
 	/*
 	요구 사항 다시 정리
@@ -171,18 +185,50 @@ vm_get_frame (void) {
 	- 성공적으로 가져오면 프레임을 할당하고 멤버를 초기화한 다. 음. 바. 화
 	- 페이지 할당 실패 시 해당 케이스를 PANIC("todo")로 표시 
 	*/
-	
-	frame -> kva = palloc_get_page(PAL_USER); // 사용자 풀에서 페이지 할당
-	memset(frame->page, 0, sizeof(struct page));
-
-
-	if (frame->kva == NULL){
-		PANIC("todo");
-	}
-	frame = malloc(sizeof(struct frame));
-
+	// void *kva = palloc_get_page(PAL_USER); // 사용자 풀에서 페이지 할당
+	// if (kva == NULL){
+	// 	PANIC("todo");
+	// }
+	// frame = malloc(sizeof(struct frame));
+	// frame->kva = kva;
+	/* 새로운 frame 구조체르 메모리에 할당
+	이는 물리 페이지 데이터를  저장할 공간*/
+	struct frame *frame = malloc(sizeof(struct frame));
+	// 예외 처리 
 	ASSERT (frame != NULL);
+
+	/* 실제 물리 페이지 할당 
+		PAL_USER : 사용자 프로세스용 메모리 풀에서 할당
+		PAL_ZERO : 할당된 페이지 0으로 초기화
+		palloc_get_page -> 4kb 페이지 바로 할당해주는 함수	
+	*/
+	frame->kva = palloc_get_page(PAL_USER | PAL_ZERO);
+	
+	/* 메모리 부족 상황 처리
+	사용 가능한 물리 페이지가 없는 경우*/
+	if(frame->kva == NULL){
+		PANIC("todo");
+		/* 희생 프레임 선택 및 교체
+		vm_evict_frame을 사용함 페이지 교체 알고리즘,
+		교체할 프레임을 선택, 이 프레임을 디스크로*/
+		struct frame *vicim1 = vm_evict_frame();
+		// 예외처리
+
+		/* 희생자의 물리 페이지를 재활용
+			교체된 프레임의 물리 주소를 새로운 프레임이 사용*/
+		frame->kva = vicim1->kva;
+
+		/* 희생자 프레임 구조체 해제 */
+		free(vicim1);
+	}
+	/* 새로운 프레임 초기화 아직 가상페이지와 연결 x */
+	frame->page = NULL;
+	
+	/* 프레임 테이블에 등록 */
+
 	ASSERT (frame->page == NULL);
+
+	// 할당 프레임 반환
 	return frame;
 }
 
@@ -235,15 +281,21 @@ vm_dealloc_page (struct page *page) {
 }
 
 /* Claim the page that allocate on VA. */
+/* va에 해당하는 page를 claim합니다. 먼저 page를 얻은 뒤,
+   그 page로 vm_do_claim_page를 호출해야 합니다.*/
 bool
 vm_claim_page (void *va UNUSED) {
-	struct page *page = NULL;
+	struct page *page = spt_find_page(&thread_current()->spt,va);
 	/* TODO: Fill this function */
 	/*
 	할당할 페이지를 확보합니다 va.
 	먼저 페이지를 가져온 다음, 
 	해당 페이지를 사용하여 vm_do_claim_page 함수를 호출해야 합니다.
 	*/
+	if (page == NULL){
+		return false;
+	}
+	// 실제 페이지 claim 실행
 	return vm_do_claim_page (page);
 }
 
@@ -256,21 +308,35 @@ vm_claim_page (void *va UNUSED) {
 */
 static bool
 vm_do_claim_page (struct page *page) {
+	// 프레임 가져옴
 	struct frame *frame = vm_get_frame ();
 
-	/* Set links */
+	/* Set links
+	   페이지 <-> 프레임 연결
+	   가상 페이지와 물리 프레임 관게 설정 */
 	frame->page = page;
 	page->frame = frame;
 
 	struct thread *current = thread_current();
 	/* 
 	pml4_set_page 함수 인자
+	현재 스레드 페이지 테이블, 가상 주소, 물리 주소(커널 가상주소), 쓰기 권한
 	pml4_set_page (uint64_t *pml4, void *upage, void *kpage, bool rw) 
 	 */
-	pml4_set_page(current->pml4, page->va, frame->kva, page->rw);
+	// 페이지 테이블 엔트리 설정 및 mmu 매핑
+	if (!pml4_set_page(current->pml4, page->va, frame->kva, page->rw)){
+		// 매핑 실패 처리 - 메모리 부족, 이미 매핑된 주소, 잘못된 권한
+		page->frame = NULL;
+		// get frame에서 palloc get page했으니 
+		palloc_free_page(frame->kva);
+		// get frame에서 malloc을 했으니 
+		free(frame);
+
+		return false;
+	}
 
 	/* TODO: Insert page table entry to map page's VA to frame's PA. */
-	
+	// 실제 페이지 내용 로딩
 	return swap_in (page, frame->kva);
 }
 
@@ -283,7 +349,7 @@ page_hash (const struct hash_elem *p_, void *aux UNUSED) {
 /* Initialize new supplemental page table */
 void
 supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
-		if(!hash_init(&spt->hash_list, page_hash, page_less, NULL)){
+		if(!hash_init(&spt->spt_hash, page_hash, page_less, NULL)){
 			return ;
 		}
 }
