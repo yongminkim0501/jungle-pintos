@@ -106,9 +106,10 @@ spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 	// 만약 error 발생 하면 null을 리턴
 
 	// 여기 반복문 -> 이 부분 내장되어있는 함수가 있다고 함
-	page1->va = va;
+	page1->va = pg_round_down(va);
 	// hash_elem
-	struct hash_elem *finded_elem = hash_find(spt->hash_list, page1->elem);
+	struct hash_elem h_elem = page1->hash_elem;
+	struct hash_elem *finded_elem = hash_find(spt->hash_list, &h_elem);
 	if(finded_elem != NULL) page1 = hash_entry(finded_elem, struct page, elem);
 	return page1;
 }
