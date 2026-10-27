@@ -225,6 +225,7 @@ vm_get_frame (void) {
 	frame->page = NULL;
 	
 	/* 프레임 테이블에 등록 */
+	frame_table_insert(&frame->frame_elem);
 
 	ASSERT (frame->page == NULL);
 
@@ -379,4 +380,10 @@ page_less(const struct hash_elem *elem1, const struct hash_elem *elem2, void *au
 	if (a->va < b->va) return true;
 	return false;
 	
+}
+
+void frame_table_insert(struct list_elem *elem){
+	struct thread *cur = thread_current();
+	list_push_back(&frame_table, elem);
+	return;
 }
