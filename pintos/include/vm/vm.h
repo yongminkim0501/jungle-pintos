@@ -45,6 +45,8 @@ struct page {
 	const struct page_operations *operations;
 	void *va;              /* 가상주소 Address in terms of user space */
 	struct frame *frame;   /* Back reference for frame */
+	int key; 
+	struct hash_elem *elem; //페이지를 해시테이블에 넣기 위해 해시 테이블 elem 을 넣는다.
 
 	/* Your implementation */
 	struct hash_elem hash_elem;	// spt 해시테이블 연결고리 
@@ -59,6 +61,7 @@ struct page {
 #endif
 	};
 };
+
 
 /* The representation of "frame" */
 struct frame {
