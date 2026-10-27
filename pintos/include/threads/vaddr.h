@@ -45,11 +45,11 @@
 
 // FIXME: add checking
 /* Returns kernel virtual address at which physical address PADDR
- *  is mapped. */
+ *  is mapped. *///KVA 구하기
 #define ptov(paddr) ((void *) (((uint64_t) paddr) + KERN_BASE))
 
 /* Returns physical address at which kernel virtual address VADDR
- * is mapped. */
+ * is mapped. *///PA 구하기
 #define vtop(vaddr) \
 ({ \
 	ASSERT(is_kernel_vaddr(vaddr)); \

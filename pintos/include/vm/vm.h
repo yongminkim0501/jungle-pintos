@@ -2,6 +2,7 @@
 #define VM_VM_H
 #include <stdbool.h>
 #include "threads/palloc.h"
+#include "kernel/hash.h"
 
 enum vm_type {
 	/* page not initialized */
@@ -42,11 +43,14 @@ struct thread;
  * DO NOT REMOVE/MODIFY PREDEFINED MEMBER OF THIS STRUCTURE. */
 struct page {
 	const struct page_operations *operations;
-	void *va;              /* Address in terms of user space */
+	void *va;              /* 가상주소 Address in terms of user space */
 	struct frame *frame;   /* Back reference for frame */
 	bool rw;
 	/* Your implementation */
 	struct hash_elem elem;
+	
+	/* Your implementation */
+	struct hash_elem hash_elem;	// spt 해시테이블 연결고리 
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
 	union {
@@ -62,6 +66,7 @@ struct page {
 #endif
 	};
 };
+
 
 /* The representation of "frame" */
 struct frame {

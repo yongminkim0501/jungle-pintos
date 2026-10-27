@@ -9,6 +9,10 @@
 #include "filesys/page_cache.h"
 #include "lib/kernel/list.h"
 #include "threads/mmu.h"
+#include "threads/thread.h"
+
+
+
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
 void
@@ -44,13 +48,13 @@ static struct frame *vm_get_victim (void);
 static bool vm_do_claim_page (struct page *page);
 static struct frame *vm_evict_frame (void);
 
-/* 초기화자를 사용하여 대기 중인 페이지 객체를 생성합니다. 생성하고 싶다면
- * 페이지를 직접 생성하지 말고 이 함수를 통해 생성하세요
- * `vm_alloc_page`.
- * spt -> uninit 으로 
- * 
- * 
- * */
+static uint64_t page_hash (const struct hash_elem *e, void *aux);
+static bool page_less (const struct hash_elem *a, const struct hash_elem *b, void *aux);
+static void hash_destructor  (struct hash_elem *e, void *aux);
+
+/* Create the pending page object with initializer. If you want to create a
+ * page, do not create it directly and make it through this function or
+ * `vm_alloc_page`. */
 bool
 vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		vm_initializer *init, void *aux) {
@@ -110,9 +114,9 @@ spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 
 /* Insert PAGE into spt with validation. */
 bool
-spt_insert_page (struct supplemental_page_table *spt UNUSED,
+spt_insert_page (struct supplemental_page_table *spt UNUSED, //인설트 담당
 		struct page *page UNUSED) {
-	int succ = false;
+	int succ = false; //succ 란 성공 했는지 아닌지를 하는 것
 	/* TODO: Fill this function. */
 	// hash_insert를 통하여 spt에 페이지 삽입
 	// hash_insert->hash_elem 반환 
@@ -122,11 +126,8 @@ spt_insert_page (struct supplemental_page_table *spt UNUSED,
 
 void
 spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
-	vm_dealloc_page (page);+
-
-	// hash_delete(struct hash *, struct hash_elem *)
-
-
+	hash_delete(&spt->spt_hash, &page->hash_elem);
+	vm_dealloc_page (page);
 	return true;
 }
 
@@ -178,6 +179,7 @@ vm_get_frame (void) {
 	frame = malloc(sizeof(struct frame));
 	frame->kva = kva;
 
+
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
 	return frame;
@@ -198,9 +200,26 @@ bool
 vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
 	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
-	struct page *page = NULL;
-	/* TODO: Validate the fault */
-	/* TODO: Your code goes here */
+	struct page *page = spt_find_page(spt, addr);
+	
+	// is_kernel_vddd는 KERN_BASE보다 주소값이 클 때, 주소검사
+	if (addr == NULL || is_kernel_vadd(addr))
+		return false;
+
+	// not_present는 이 폴트가 페이지가 아예 없어서 난것인가
+	// 이미 올라와 있는 페이지에서 폴트 권한 위반	
+	if (!not_present)
+		return false;
+	
+	// spt에서 찾기 	
+	if (page == NULL)
+		return false;
+
+	// write는 왜 있는지 모르겠음
+	// 새 페이지때 쓰기 권한, 읽기 전용인데 쓰면 안됨
+	if (write)
+		return false;
+
 	return vm_do_claim_page (page);
 	// vm_do_claim_page 함수
 	// : 페이지의 VA를 프레임의 PA에 매핑하는 페이지 테이블 항목을 삽입하세요.
@@ -250,7 +269,7 @@ vm_do_claim_page (struct page *page) {
 	pml4_set_page(current->pml4, page->va, frame->kva, page->rw);
 
 	/* TODO: Insert page table entry to map page's VA to frame's PA. */
-
+	
 	return swap_in (page, frame->kva);
 }
 
@@ -263,12 +282,9 @@ page_hash (const struct hash_elem *p_, void *aux UNUSED) {
 /* Initialize new supplemental page table */
 void
 supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
-	// 보조 페이지 테이블을 초기화
-	// 보조 페이지 테이블에 사용할 데이터 구조를 선택할 수 있음
-	// __do_fork 에서 호출됨 userprog/process.c
-	if (!hash_init(&spt->hash_list, page_hash, cmp_page_less, NULL)){ //hash bytes 바꿔줘야 할 수도 있음
-		return ;
-	}
+		if(!hash_init(&spt->spt_hash, page_hash, page_less, NULL)){
+			return ;
+		}
 }
 
 /* Copy supplemental page table from src to dst */
@@ -283,6 +299,7 @@ void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
-
-
+	// buckets에 달린 페이지를 삭제
+	// buckets 해제는 hash에서 페이지 해제는 hash_destructor에서 
+	hash_clear (&spt->spt_hash, hash_destructor);
 }
