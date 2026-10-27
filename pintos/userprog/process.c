@@ -29,6 +29,7 @@
 
 #define USERPROG 1
 
+static bool lazy_load_segment (struct page *page, void *aux);
 static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
@@ -798,7 +799,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		count ++;
 
 		// init에는 뭐를 넣어야 하지 ??? -> frame 쪽 initialize 라고 듣기는 했는데 애매함
-		if (!vm_alloc_page_with_initializer(VM_ANON, upage, writable, init, v_entry)){ // 일단 v_entry를 어디 넣어야 하는지 정확히 모르겠어서 aux에 집어넣음
+		if (!vm_alloc_page_with_initializer(VM_ANON, upage, writable, lazy_load_segment, v_entry)){ // 일단 v_entry를 어디 넣어야 하는지 정확히 모르겠어서 aux에 집어넣음
 			return false;
 		}
 		

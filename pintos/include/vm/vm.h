@@ -44,9 +44,9 @@ struct page {
 	const struct page_operations *operations;
 	void *va;              /* Address in terms of user space */
 	struct frame *frame;   /* Back reference for frame */
-
+	bool rw;
 	/* Your implementation */
-
+	struct hash_elem elem;
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
 	union {
@@ -54,7 +54,7 @@ struct page {
 		struct anon_page anon;
 		struct file_page file;
 #ifdef VM
-	struct hash_elem *elem;
+	
 #endif
 
 #ifdef EFILESYS
@@ -67,6 +67,7 @@ struct page {
 struct frame {
 	void *kva;
 	struct page *page;
+	struct list_elem frame_elem;
 };
 
 /* The function table for page operations.

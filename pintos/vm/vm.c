@@ -7,6 +7,8 @@
 #include "filesys/file.h"
 #include "vm/uninit.h"
 #include "filesys/page_cache.h"
+#include "lib/kernel/list.h"
+#include "threads/mmu.h"
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
 void
@@ -20,6 +22,8 @@ vm_init (void) {
 	/* DO NOT MODIFY UPPER LINES. */
 	/* TODO: Your code goes here. */
 }
+
+struct list frame_table;
 
 /* Get the type of the page. This function is useful if you want to know the
  * type of the page after it will be initialized.
@@ -90,26 +94,18 @@ err:
 /* Find VA from spt and return page. On error, return NULL. */
 struct page *
 spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
-	struct page *page = NULL;
+	struct page* page1 = (struct page*)malloc(sizeof(struct page));
 	/* TODO: Fill this function. */
 	// spt 전체 리스트를 순회
 	// va를 통하여 해당 값과 맞는 값을 찾으면 page 타입으로 반환
 	// 만약 error 발생 하면 null을 리턴
 
 	// 여기 반복문 -> 이 부분 내장되어있는 함수가 있다고 함
-	for (struct hash_elem *start; true/*해시여서 무조건 하나는 걸린다?*/;start = hash_next(start)){
-		if ((hash_find(spt, hash_bytes(va, sizeof(uint64_t))) == start)){
-			break;
-		}
-	}
-
-
-	if (hash_bytes(va, sizeof(uint64_t)) == spt->hash_list->hash){
-		return page;
-	}
-	
-
-	return page;
+	page1->va = va;
+	// hash_elem
+	struct hash_elem *finded_elem = hash_find(spt->hash_list, page1->elem);
+	if(finded_elem != NULL) page1 = hash_entry(finded_elem, struct page, elem);
+	return page1;
 }
 
 /* Insert PAGE into spt with validation. */
@@ -153,14 +149,34 @@ vm_evict_frame (void) {
 	return NULL;
 }
 
-/* palloc() and get frame. If there is no available page, evict the page
- * and return it. This always return valid address. That is, if the user pool
- * memory is full, this function evicts the frame to get the available memory
- * space.*/
+/* palloc() 및 프레임 가져오기. 사용 가능한 페이지가 없으면 페이지를 제거합니다
+ * 그리고 반환합니다. 항상 유효한 주소가 반환됩니다. 즉, 사용자 풀이
+ * 메모리가 가득 찼습니다. 이 함수는 사용 가능한 메모리를 확보하기 위해 프레임을 제거합니다
+ *공간.
+ `page.page() `를 호출하여 사용자 풀에서 새 물리적 페이지를 가져옵니다 palloc_get_page. 
+ 사용자 풀에서 페이지를 성공적으로 가져오면 프레임을 할당하고 멤버를 초기화한 후 반환합니다. 
+ `page.page()`를 구현한 후에는 vm_get_frame모든 사용자 공간 페이지(PALLOC_USER)를 
+ 이 함수를 통해 할당해야 합니다. 페이지 할당 실패 시 스왑 아웃 처리는 현재로서는 필요하지 않으며, 
+ 해당 경우를 `swapout`으로 표시하기만 하면 됩니다 PANIC ("todo") .
+ */
+
 static struct frame *
 vm_get_frame (void) {
 	struct frame *frame = NULL;
 	/* TODO: Fill this function. */
+	/*
+	요구 사항 다시 정리
+	- vm_get_frame 함수를 통하여 사용자 공간 PALLOC_USER 에서 사용될 메모리 페이지를 가져와야 함
+	- palloc_get_page() 함수를 호출하여 사용자 풀에서 새 물리적 페이지(프레임)를 가져옴
+	- 성공적으로 가져오면 프레임을 할당하고 멤버를 초기화한 다. 음. 바. 화
+	- 페이지 할당 실패 시 해당 케이스를 PANIC("todo")로 표시 
+	*/
+	void *kva = palloc_get_page(PAL_USER); // 사용자 풀에서 페이지 할당
+	if (kva == NULL){
+		PANIC("todo");
+	}
+	frame = malloc(sizeof(struct frame));
+	frame->kva = kva;
 
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
@@ -203,11 +219,21 @@ bool
 vm_claim_page (void *va UNUSED) {
 	struct page *page = NULL;
 	/* TODO: Fill this function */
-
+	/*
+	할당할 페이지를 확보합니다 va.
+	먼저 페이지를 가져온 다음, 
+	해당 페이지를 사용하여 vm_do_claim_page 함수를 호출해야 합니다.
+	*/
 	return vm_do_claim_page (page);
 }
 
-/* Claim the PAGE and set up the mmu. */
+/* 
+클레임은 물리적 프레임, 즉 페이지를 할당하는 것을 의미합니다.
+먼저 vm_get_frame(템플릿에서 이미 수행되어 있는) 함수를 호출하여 프레임을 가져옵니다.
+그런 다음 MMU를 설정해야 합니다. 
+다시 말해, 페이지 테이블에서 가상 주소와 물리적 주소 간의 매핑을 추가해야 합니다. 
+반환 값은 작업의 성공 여부를 나타내야 합니다.
+*/
 static bool
 vm_do_claim_page (struct page *page) {
 	struct frame *frame = vm_get_frame ();
@@ -216,11 +242,23 @@ vm_do_claim_page (struct page *page) {
 	frame->page = page;
 	page->frame = frame;
 
+	struct thread *current = thread_current();
+	/* 
+	pml4_set_page 함수 인자
+	pml4_set_page (uint64_t *pml4, void *upage, void *kpage, bool rw) 
+	 */
+	pml4_set_page(current->pml4, page->va, frame->kva, page->rw);
+
 	/* TODO: Insert page table entry to map page's VA to frame's PA. */
 
 	return swap_in (page, frame->kva);
 }
 
+unsigned
+page_hash (const struct hash_elem *p_, void *aux UNUSED) {
+  const struct page *p = hash_entry (p_, struct page, elem);
+  return hash_bytes (&p->va, sizeof p->va);
+}
 
 /* Initialize new supplemental page table */
 void
@@ -228,7 +266,7 @@ supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
 	// 보조 페이지 테이블을 초기화
 	// 보조 페이지 테이블에 사용할 데이터 구조를 선택할 수 있음
 	// __do_fork 에서 호출됨 userprog/process.c
-	if (!hash_init(&spt->hash_list, hash_bytes, cmp_page_less, NULL)){ //hash bytes 바꿔줘야 할 수도 있음
+	if (!hash_init(&spt->hash_list, page_hash, cmp_page_less, NULL)){ //hash bytes 바꿔줘야 할 수도 있음
 		return ;
 	}
 }
