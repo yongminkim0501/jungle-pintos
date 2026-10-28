@@ -49,7 +49,7 @@ static struct frame *vm_evict_frame (void);
 
 static unsigned page_hash (const struct hash_elem *e, void *aux);
 static bool page_less (const struct hash_elem *a, const struct hash_elem *b, void *aux);
-static void hash_destructor  (struct hash_elem *e, void *aux);
+static void page_destructor  (struct hash_elem *e, void *aux);
 
 /* 초기화 함수와 함께 대기 중인 페이지 객체를 생성합니다. 페이지를 직접 생성하지 말고,
  * 반드시 이 함수나 vm_alloc_page를 통해 생성하세요. -> 대기 중인 페이지 객체는 uninit page를 말함 */
@@ -127,7 +127,7 @@ spt_insert_page (struct supplemental_page_table *spt UNUSED, //인설트 담당
 
 	struct hash_elem h_elem = page -> hash_elem;
 	
-	struct hash_elem *elem = hash_insert(spt->hash_list, &h_elem);
+	struct hash_elem *elem = hash_insert(spt->hash_list, &page->hash_elem);
 	if (elem==NULL){//만약 없어서 새로 넣었다면 NULL 반환 
 		//이미 있다면 그냥 그요소를 반환
 		succ = true;
@@ -224,6 +224,7 @@ vm_get_frame (void) {
 	frame->page = NULL;
 	
 	/* 프레임 테이블에 등록 */
+	frame_table_insert(&frame->frame_elem);
 
 	ASSERT (frame->page == NULL);
 
@@ -366,8 +367,8 @@ supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
 	// buckets에 달린 페이지를 삭제
-	// buckets 해제는 hash에서 페이지 해제는 hash_destructor에서 
-	hash_clear (&spt->hash_list, hash_destructor);
+	// buckets 해제는 hash에서 페이지 해제는 page_destructor에서 
+	hash_clear (&spt->hash_list, page_destructor);
 }
 
 bool 
@@ -380,7 +381,15 @@ page_less(const struct hash_elem *elem1, const struct hash_elem *elem2, void *au
 	
 }
 
-static void
-hash_destructor  (struct hash_elem *e, void *aux){
-	
+// spt 비울때 페이지 하나씩 해제
+void 
+page_destructor(struct hash_elem *e, void *aux UNUSED){
+	struct page *p = hash_entry (e, struct page, hash_elem);
+	vm_dealloc_page(p);
+}
+
+void frame_table_insert(struct list_elem *elem){
+	struct thread *cur = thread_current();
+	list_push_back(&frame_table, elem);
+	return;
 }
