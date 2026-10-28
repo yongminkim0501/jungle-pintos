@@ -34,6 +34,22 @@ static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
 static void __do_fork (void *);
+static struct vm_entry*vm_entry_init(size_t VM_BIN, uint8_t vaddr, uint32_t zero_bytes, uint32_t read_bytes, off_t offset, struct file *v_file);
+static bool install_page (void *upage, void *kpage, bool writable);
+
+static struct vm_entry*
+vm_entry_init(size_t VM_BIN, uint8_t vaddr, uint32_t zero_bytes,
+	uint32_t read_bytes, off_t offset, struct file *v_file
+){
+	struct vm_entry *v_entry;
+	v_entry -> VM_BIN = VM_BIN; // 여기 뭐 넣어야 하는지 모르겠음
+	v_entry -> vaddr = vaddr;
+	v_entry -> zero_bytes = zero_bytes;
+	v_entry -> read_bytes = read_bytes;
+	v_entry -> offset = offset;
+	v_entry -> file = v_file;
+	return v_entry;
+}
 
 struct 
 fork_info{
@@ -796,9 +812,9 @@ validate_segment (const struct Phdr *phdr, struct file *file) {
 }
 
 #ifndef VM
-/* Codes of this block will be ONLY USED DURING project 2.
- * If you want to implement the function for whole project 2, implement it
- * outside of #ifndef macro. */
+/* 이 블록의 코드는 프로젝트 2에서만 사용됩니다.
+ * 프로젝트 2 전체에 대해 이 함수를 구현하고 싶다면, 구현하세요
+ #ifndef 매크로 밖에서. */
 
 /* load() helpers. */
 static bool install_page (void *upage, void *kpage, bool writable);
@@ -917,9 +933,18 @@ install_page (void *upage, void *kpage, bool writable) {
 			&& pml4_set_page (t->pml4, upage, kpage, writable));
 }
 #else
-/* From here, codes will be used after project 3.
- * If you want to implement the function for only project 2, implement it on the
- * upper block. */
+/* 여기부터는 프로젝트 3 이후에 사용할 코드입니다.
+ * 프로젝트 2에만 해당 함수를 구현하려면, 어디에 구현하시겠습니까
+ * 상층 블록. */
+static bool
+install_page (void *upage, void *kpage, bool writable) {
+	struct thread *t = thread_current ();
+
+	/* Verify that there's not already a page at that virtual
+	 * address, then map our page there. */
+	return (pml4_get_page (t->pml4, upage) == NULL
+			&& pml4_set_page (t->pml4, upage, kpage, writable));
+}
 
 static bool
 lazy_load_segment (struct page *page, void *aux) {
@@ -943,22 +968,23 @@ lazy_load_segment (struct page *page, void *aux) {
 	return true;	
 }
 
-/* Loads a segment starting at offset OFS in FILE at address
- * UPAGE.  In total, READ_BYTES + ZERO_BYTES bytes of virtual
- * memory are initialized, as follows:
+/* FILE의 OFS 오프셋부터 시작하는 세그먼트를 주소에서 로드합니다
+ * 재출시.  총 READ_BYTES + ZERO_BYTES 바이트의 가상
+ * 메모리는 다음과 같이 초기화됩니다:
  *
- * - READ_BYTES bytes at UPAGE must be read from FILE
- * starting at offset OFS.
+ * - READ_BYTES 바이트는 FILE에서 읽어야 합니다
+ * OFS 오프셋에서 시작합니다.
  *
- * - ZERO_BYTES bytes at UPAGE + READ_BYTES must be zeroed.
+ * - UPAGE와 READ_BYTES에 해당하는 ZERO_BYTES 바이트를 0으로 초기화해야 합니다.
  *
- * The pages initialized by this function must be writable by the
- * user process if WRITABLE is true, read-only otherwise.
+ * 이 함수로 초기화된 페이지는 쓰기가 가능해야 합니다
+ * WRITABLE이 true이면 사용자 프로세스, 그렇지 않으면 읽기 전용 프로세스입니다.
  *
- * Return true if successful, false if a memory allocation error
- * or disk read error occurs. */
+ * 메모리 할당 오류가 발생하면 false, 성공하면 true를 반환합니다
+ * 또는 디스크 읽기 오류가 발생합니다. */
 // 가상 페이지에 담을 파일 포인터, 파일 오프셋, 가상 페이지를 적재할 가상 주소(upage)
 // 페이지에서 읽어야할 바이트, 0으로 패딩해줘야 할 바이트
+
 static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
@@ -973,12 +999,26 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE; // 4kb까지만 읽어라
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-		/* TODO: Set up aux to pass information to the lazy_load_segment. */
-		void *aux = NULL; // 전달 인자
-		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
-					writable, lazy_load_segment, aux))
+		uint8_t *kpage = palloc_get_page (PAL_USER);
+		if (kpage == NULL)
 			return false;
 
+		if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes) {
+			palloc_free_page (kpage);
+			return false;
+		}
+		memset (kpage + page_read_bytes, 0, page_zero_bytes);
+		struct vm_entry *v_entry = vm_entry_init(
+			NULL, kpage, page_zero_bytes, page_read_bytes, ofs, file);
+		/* TODO: Set up aux to pass information to the lazy_load_segment. */
+		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
+					writable, lazy_load_segment, v_entry))
+			return false;
+		if (!install_page (upage, kpage, writable)) {
+			printf("fail\n");
+			palloc_free_page (kpage);
+			return false;
+		}
 		/* Advance. */
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
