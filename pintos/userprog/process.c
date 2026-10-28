@@ -28,7 +28,7 @@
 #endif
 
 #define USERPROG 1
-
+static bool setup_stack (struct intr_frame *if_);
 static bool lazy_load_segment (struct page *page, void *aux);
 static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
@@ -624,7 +624,7 @@ struct ELF64_PHDR {
 #define ELF ELF64_hdr
 #define Phdr ELF64_PHDR
 
-static bool setup_stack (struct intr_frame *if_);
+bool setup_stack (struct intr_frame *if_);
 static bool validate_segment (const struct Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes,
@@ -839,7 +839,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 	ASSERT (pg_ofs (upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
 
-	int count = 0;
 	file_seek (file, ofs);
 	while (read_bytes > 0 || zero_bytes > 0) {
 		/* Do calculate how to fill this page.
@@ -860,8 +859,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		}
 		memset (kpage + page_read_bytes, 0, page_zero_bytes);
 
-		struct vm_entry *v_entry = vm_entry_init(count, kpage, zero_bytes, read_bytes, ofs, file);
-		count ++;
+		struct vm_entry *v_entry = vm_entry_init(NULL, kpage, page_zero_bytes, page_read_bytes, ofs, file);
 
 		// init에는 뭐를 넣어야 하지 ??? -> frame 쪽 initialize 라고 듣기는 했는데 애매함
 		if (!vm_alloc_page_with_initializer(VM_ANON, upage, writable, lazy_load_segment, v_entry)){ // 일단 v_entry를 어디 넣어야 하는지 정확히 모르겠어서 aux에 집어넣음
@@ -928,16 +926,20 @@ lazy_load_segment (struct page *page, void *aux) {
 	/* TODO: Load the segment from the file */
 	/* TODO: This called when the first page fault occurs on address VA. */
 	/* TODO: VA is available when calling this function. */
-	uint32_t zero_bytes = aux -> zero_bytes;
-	uint32_t read_bytes = aux -> read_bytes;
-	off_t offset = aux -> offset;
-	struct file *file = aux-> file;
+	struct vm_entry *aux1 = aux;
+	size_t zero_bytes = aux1->zero_bytes;
+	// size_t zero_bytes = aux -> zero_bytes;
+	// size_t read_bytes = aux -> read_bytes;
+	size_t read_bytes = aux1->read_bytes;
+	off_t offset = aux1 -> offset;
+	struct file *file = aux1 -> file;
+
 	file_seek(file, offset);
 	if (file_read(file, page->frame->kva, read_bytes) != (int) read_bytes)
 	{
-		return false
+		return false;
 	}
-	memset(page->frame->kva+read_bytes, 0, zero_bytes);
+	memset(page->frame->kva+read_bytes, 0, zero_bytes); // padding
 	return true;	
 }
 
@@ -988,13 +990,21 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 /* Create a PAGE of stack at the USER_STACK. Return true on success. */
 static bool
 setup_stack (struct intr_frame *if_) {
+
+// 	/* TODO: Map the stack on stack_bottom and claim the page immediately.
+// 	 * TODO: If success, set the rsp accordingly.
+// 	 * TODO: You should mark the page is stack. */
+// 	/* TODO: Your code goes here */
 	bool success = false;
 	void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
+// 	if(vm_alloc_page(VM_ANON | VM_MARKER_0, stack_bottom, true)){
+// 		success = vm_claim_page(stack_bottom);
 
-	/* TODO: Map the stack on stack_bottom and claim the page immediately.
-	 * TODO: If success, set the rsp accordingly.
-	 * TODO: You should mark the page is stack. */
-	/* TODO: Your code goes here */
+// 		if(success){
+// 			if_->rsp = USER_STACK;		/* 가상주소의 유저 스택 맨 윗부분에 넣어놓는다, */
+// 			thread_current() -> stack_bottom = stack_bottom; /*  */
+// 		}
+// 	}
 
 	return success;
 }

@@ -16,8 +16,8 @@ enum vm_type {
 
 	/* Bit flags to store state */
 
-	/* Auxillary bit flag marker for store information. You can add more
-	 * markers, until the value is fit in the int. */
+	/* 저장 정보를 위한 보조 비트 플래그 마커. 더 추가할 수 있습니다
+	 * 값이 int에 맞을 때까지 마커를 추가합니다. */
 	VM_MARKER_0 = (1 << 3),
 	VM_MARKER_1 = (1 << 4),
 
@@ -46,13 +46,13 @@ struct page {
 	void *va;              /* 가상주소 Address in terms of user space */
 	struct frame *frame;   /* Back reference for frame */
 	bool rw;
-	
+
 	/* Your implementation */
 	struct hash_elem hash_elem;	// spt 해시테이블 연결고리 
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
 	union {
-		struct uninitdd_page uninit;
+		struct uninit_page uninit;
 		struct anon_page anon;
 		struct file_page file;
 #ifdef VM

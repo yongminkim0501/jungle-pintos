@@ -10,8 +10,7 @@
 #include "lib/kernel/list.h"
 #include "threads/mmu.h"
 #include "threads/thread.h"
-
-
+#include "threads/vaddr.h"
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -48,7 +47,7 @@ static struct frame *vm_get_victim (void);
 static bool vm_do_claim_page (struct page *page);
 static struct frame *vm_evict_frame (void);
 
-static uint64_t page_hash (const struct hash_elem *e, void *aux);
+static unsigned page_hash (const struct hash_elem *e, void *aux);
 static bool page_less (const struct hash_elem *a, const struct hash_elem *b, void *aux);
 static void page_destructor  (struct hash_elem *e, void *aux);
 
@@ -77,10 +76,10 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		 * 미초기화 페이지에 매핑되어야 할 물리 프레임의 정보를 저장하고 이를 spt에 등록한다고 추상화*/
 		/* 할 일: 페이지를 spt에 삽입한다. */
 		struct page* new_page = calloc(1, sizeof(struct page));
-		if (type == VM_ANON){ // 이 부분 임시코드라 수정 필요 -> 모든 상황마다 uninit_new를 해야하는 지는 모르겠음
+		if ((type ^ VM_ANON) == VM_ANON){ // 이 부분 임시코드라 수정 필요 -> 모든 상황마다 uninit_new를 해야하는 지는 모르겠음
 			uninit_new(new_page, upage, init, VM_ANON , aux, anon_initializer); 
 		}
-		else if (type == VM_FILE){
+		else if ((type ^ VM_FILE) == VM_FILE){
 			uninit_new(new_page, upage, init, VM_FILE, aux, file_backed_initializer);
 		}
 		new_page->rw = writable;
@@ -108,7 +107,7 @@ spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 	// hash_elem
 	struct hash_elem h_elem = page1->hash_elem;
 	struct hash_elem *finded_elem = hash_find(spt->hash_list, &h_elem);
-	if(finded_elem != NULL) page1 = hash_entry(finded_elem, struct page, elem);
+	if(finded_elem != NULL) page1 = hash_entry(finded_elem, struct page, hash_elem);
 	return page1;
 }
 
@@ -126,7 +125,7 @@ spt_insert_page (struct supplemental_page_table *spt UNUSED, //인설트 담당
 	//인덱스 0부터 7까지 하고 key를 주소로 하면 될꺼 같은데? 
 	//주소는 VM 주소로 해야할듯? SPT 가 물리주소로 하는게 아닌거 같으니까? 
 
-
+	struct hash_elem h_elem = page -> hash_elem;
 	
 	struct hash_elem *elem = hash_insert(spt->hash_list, &page->hash_elem);
 	if (elem==NULL){//만약 없어서 새로 넣었다면 NULL 반환 
@@ -251,7 +250,7 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	struct page *page = spt_find_page(spt, addr);
 	
 	// is_kernel_vddd는 KERN_BASE보다 주소값이 클 때, 주소검사
-	if (addr == NULL || is_kernel_vadd(addr))
+	if (addr == NULL || is_kernel_vaddr(addr))
 		return false;
 
 	// not_present는 이 폴트가 페이지가 아예 없어서 난것인가
@@ -343,7 +342,7 @@ vm_do_claim_page (struct page *page) {
 
 unsigned
 page_hash (const struct hash_elem *p_, void *aux UNUSED) {
-  const struct page *p = hash_entry (p_, struct page, elem);
+  const struct page *p = hash_entry (p_, struct page, hash_elem);
   return hash_bytes (&p->va, sizeof p->va);
 }
 
@@ -374,8 +373,8 @@ supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 
 bool 
 page_less(const struct hash_elem *elem1, const struct hash_elem *elem2, void *aux UNUSED){
-    const struct page *a = hash_entry(elem1, struct page, elem);
-    const struct page *b = hash_entry(elem2, struct page, elem);
+    const struct page *a = hash_entry(elem1, struct page, hash_elem);
+    const struct page *b = hash_entry(elem2, struct page, hash_elem);
 
 	if (a->va < b->va) return true;
 	return false;
