@@ -127,8 +127,7 @@ spt_insert_page (struct supplemental_page_table *spt UNUSED, //인설트 담당
 
 	struct hash_elem h_elem = page -> hash_elem;
 	
-	struct hash_elem *elem = hash_insert(spt->hash_list, &page->hash_elem);
-	if (elem==NULL){//만약 없어서 새로 넣었다면 NULL 반환 
+	if (hash_insert(spt->hash_list, &page->hash_elem)==NULL){//만약 없어서 새로 넣었다면 NULL 반환 
 		//이미 있다면 그냥 그요소를 반환
 		succ = true;
 	}
