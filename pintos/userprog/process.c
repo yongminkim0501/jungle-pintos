@@ -34,15 +34,14 @@ static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
 static void __do_fork (void *);
-static struct vm_entry*vm_entry_init(size_t VM_BIN, uint8_t vaddr, uint32_t zero_bytes, uint32_t read_bytes, off_t offset, struct file *v_file);
+static struct vm_entry*vm_entry_init(uint8_t vaddr, uint32_t zero_bytes, uint32_t read_bytes, off_t offset, struct file *v_file);
 static bool install_page (void *upage, void *kpage, bool writable);
 
 static struct vm_entry*
-vm_entry_init(size_t VM_BIN, uint8_t vaddr, uint32_t zero_bytes,
+vm_entry_init(uint8_t vaddr, uint32_t zero_bytes,
 	uint32_t read_bytes, off_t offset, struct file *v_file
 ){
 	struct vm_entry *v_entry;
-	v_entry -> VM_BIN = VM_BIN; // 여기 뭐 넣어야 하는지 모르겠음
 	v_entry -> vaddr = vaddr;
 	v_entry -> zero_bytes = zero_bytes;
 	v_entry -> read_bytes = read_bytes;
@@ -875,13 +874,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		}
 		memset (kpage + page_read_bytes, 0, page_zero_bytes);
 
-		struct vm_entry *v_entry = vm_entry_init(NULL, kpage, page_zero_bytes, page_read_bytes, ofs, file);
-
-		// init에는 뭐를 넣어야 하지 ??? -> frame 쪽 initialize 라고 듣기는 했는데 애매함
-		if (!vm_alloc_page_with_initializer(VM_ANON, upage, writable, lazy_load_segment, v_entry)){ // 일단 v_entry를 어디 넣어야 하는지 정확히 모르겠어서 aux에 집어넣음
-			return false;
-		}
-		
 		/* Add the page to the process's address space. */
 		if (!install_page (upage, kpage, writable)) {
 			printf("fail\n");
@@ -992,6 +984,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 	ASSERT (pg_ofs (upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
 
+	file_seek(file, ofs);
 	while (read_bytes > 0 || zero_bytes > 0) {
 		/* 이 페이지를 어떻게 채울지 계산합니다.
          * FILE에서 PAGE_READ_BYTES 바이트를 읽고
@@ -999,26 +992,14 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE; // 4kb까지만 읽어라
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-		uint8_t *kpage = palloc_get_page (PAL_USER);
-		if (kpage == NULL)
-			return false;
-
-		if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes) {
-			palloc_free_page (kpage);
-			return false;
-		}
-		memset (kpage + page_read_bytes, 0, page_zero_bytes);
-		struct vm_entry *v_entry = vm_entry_init(
-			NULL, kpage, page_zero_bytes, page_read_bytes, ofs, file);
-		/* TODO: Set up aux to pass information to the lazy_load_segment. */
+		struct vm_entry *v_entry = malloc(sizeof(struct vm_entry));
+		v_entry = vm_entry_init(
+			upage, page_zero_bytes, page_read_bytes, ofs, file);
+		
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
 					writable, lazy_load_segment, v_entry))
 			return false;
-		if (!install_page (upage, kpage, writable)) {
-			printf("fail\n");
-			palloc_free_page (kpage);
-			return false;
-		}
+		
 		/* Advance. */
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
