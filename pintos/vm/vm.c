@@ -77,7 +77,6 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		 * uninit_new를 사용하면 미초기화 페이지를 만들 수 있음 
 		 * 미초기화 페이지에 매핑되어야 할 물리 프레임의 정보를 저장하고 이를 spt에 등록한다고 추상화*/
 		/* 할 일: 페이지를 spt에 삽입한다. */
-		
 		if ((VM_TYPE(type)) == VM_ANON){ // 이 부분 임시코드라 수정 필요 -> 모든 상황마다 uninit_new를 해야하는 지는 모르겠음
 			uninit_new(new_page, upage, init, VM_ANON , aux, anon_initializer); 
 		}
@@ -89,7 +88,6 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 			goto err;
 		}
 		new_page->rw = writable;
-		
 		if(spt_insert_page(spt, new_page)==false) {
 			free (new_page);
 			goto err;
@@ -109,7 +107,6 @@ spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 	// struct page* page1 = (struct page*)malloc(sizeof(struct page));
 	struct page cur_page = {0};
 	cur_page.va = pg_round_down(va);
-
 	struct hash_elem* h_e;
 	h_e = hash_find(&spt->hash_list, &cur_page.hash_elem);
 	if(h_e != NULL){
