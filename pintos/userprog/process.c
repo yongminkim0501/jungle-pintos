@@ -34,21 +34,7 @@ static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
 static void __do_fork (void *);
-static struct vm_entry*vm_entry_init(uint8_t vaddr, uint32_t zero_bytes, uint32_t read_bytes, off_t offset, struct file *v_file);
 static bool install_page (void *upage, void *kpage, bool writable);
-
-static struct vm_entry*
-vm_entry_init(uint8_t vaddr, uint32_t zero_bytes,
-	uint32_t read_bytes, off_t offset, struct file *v_file
-){
-	struct vm_entry *v_entry;
-	v_entry -> vaddr = vaddr;
-	v_entry -> zero_bytes = zero_bytes;
-	v_entry -> read_bytes = read_bytes;
-	v_entry -> offset = offset;
-	v_entry -> file = v_file;
-	return v_entry;
-}
 
 struct 
 fork_info{
@@ -943,21 +929,16 @@ lazy_load_segment (struct page *page, void *aux) {
 	/* TODO: Load the segment from the file */
 	/* TODO: This called when the first page fault occurs on address VA. */
 	/* TODO: VA is available when calling this function. */
-	struct vm_entry *aux1 = aux;
-	size_t zero_bytes = aux1->zero_bytes;
-	// size_t zero_bytes = aux -> zero_bytes;
-	// size_t read_bytes = aux -> read_bytes;
-	size_t read_bytes = aux1->read_bytes;
-	off_t offset = aux1 -> offset;
-	struct file *file = aux1 -> file;
+	struct vm_entry *aux1 = (struct vm_entry *)aux;
+	uint8_t *kva = page->frame->kva;
 
-	file_seek(file, offset);
-	if (file_read(file, page->frame->kva, read_bytes) != (int) read_bytes)
-	{
+	if (file_read_at(aux1->file,kva, aux1->read_bytes, aux1->offset)!=(int32_t)aux1->read_bytes){
+		free(aux1);
 		return false;
 	}
-	memset(page->frame->kva+read_bytes, 0, zero_bytes); // padding
-	return true;	
+	memset (kva + aux1->read_bytes, 0, aux1 -> zero_bytes);
+	free(aux1);
+	return true;
 }
 
 /* FILE의 OFS 오프셋부터 시작하는 세그먼트를 주소에서 로드합니다
@@ -983,8 +964,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
 	ASSERT (pg_ofs (upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
-
-	file_seek(file, ofs);
 	while (read_bytes > 0 || zero_bytes > 0) {
 		/* 이 페이지를 어떻게 채울지 계산합니다.
          * FILE에서 PAGE_READ_BYTES 바이트를 읽고
@@ -993,17 +972,24 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
 		struct vm_entry *v_entry = malloc(sizeof(struct vm_entry));
-		v_entry = vm_entry_init(
-			upage, page_zero_bytes, page_read_bytes, ofs, file);
+
+		v_entry -> zero_bytes = page_zero_bytes;
+		v_entry -> read_bytes = page_read_bytes;
+		v_entry -> offset = ofs;
+		v_entry -> file = file;
+	
 		
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
-					writable, lazy_load_segment, v_entry))
+					writable, lazy_load_segment, v_entry)){
+			free(v_entry);
 			return false;
+		}
 		
 		/* Advance. */
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
+		ofs += page_read_bytes;
 	}
 	return true;
 }
@@ -1011,22 +997,15 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 /* Create a PAGE of stack at the USER_STACK. Return true on success. */
 static bool
 setup_stack (struct intr_frame *if_) {
-
-// 	/* TODO: Map the stack on stack_bottom and claim the page immediately.
-// 	 * TODO: If success, set the rsp accordingly.
-// 	 * TODO: You should mark the page is stack. */
-// 	/* TODO: Your code goes here */
 	bool success = false;
 	void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
-// 	if(vm_alloc_page(VM_ANON | VM_MARKER_0, stack_bottom, true)){
-// 		success = vm_claim_page(stack_bottom);
 
-// 		if(success){
-// 			if_->rsp = USER_STACK;		/* 가상주소의 유저 스택 맨 윗부분에 넣어놓는다, */
-// 			thread_current() -> stack_bottom = stack_bottom; /*  */
-// 		}
-// 	}
-
+	if (vm_alloc_page (VM_ANON | VM_MARKER_0, stack_bottom, true)) {
+		success = vm_claim_page (stack_bottom);
+		if (success) {
+			if_->rsp = USER_STACK;
+		}
+	}
 	return success;
 }
 #endif /* VM */
