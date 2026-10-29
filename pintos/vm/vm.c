@@ -282,7 +282,7 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,
 		void *rsp = user ? (void *) f->rsp : thread_current ()->user_rsp;
 
 		// 스택 확장 인정 조건
-		if(addr<USER_STACK && addr >= f->rsp - 8 && addr >= (USER_STACK - (1<<20))){
+		if(addr<USER_STACK && addr >= rsp - 8 && addr >= (USER_STACK - (1<<20))){
 			// 스택 페이지 추가
 			vm_stack_growth(addr);
 			return true;
