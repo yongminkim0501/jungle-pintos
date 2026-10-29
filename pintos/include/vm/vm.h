@@ -93,8 +93,6 @@ struct page_operations {
  * We don't want to force you to obey any specific design for this struct.
  * All designs up to you for this. */
 struct vm_entry{
-	size_t VM_BIN;
-	uint8_t vaddr;
 	uint32_t zero_bytes;
 	uint32_t read_bytes;
 	off_t offset;
@@ -102,7 +100,7 @@ struct vm_entry{
 };
 
 struct supplemental_page_table {
-	struct hash * hash_list;
+	struct hash hash_list;
 };
 
 #include "threads/thread.h"

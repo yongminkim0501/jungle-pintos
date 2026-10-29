@@ -14,6 +14,8 @@
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
+struct list frame_table;
+
 void
 vm_init (void) {
 	vm_anon_init ();
@@ -22,11 +24,10 @@ vm_init (void) {
 	pagecache_init ();
 #endif
 	register_inspect_intr ();
+	list_init(&frame_table);
 	/* DO NOT MODIFY UPPER LINES. */
 	/* TODO: Your code goes here. */
 }
-
-struct list frame_table;
 
 /* Get the type of the page. This function is useful if you want to know the
  * type of the page after it will be initialized.
@@ -58,8 +59,9 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		vm_initializer *init, void *aux) {
 
 	ASSERT (VM_TYPE(type) != VM_UNINIT)
-
+	struct page* new_page = malloc(sizeof(struct page));
 	struct supplemental_page_table *spt = &thread_current ()->spt;
+	// 페이지 생성을 위쪽에서 하고, 
 	/*
 	page_initializer
 	-> 해당 페이지를 다른 페이지로 바꿔주는 애
@@ -75,16 +77,24 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		 * uninit_new를 사용하면 미초기화 페이지를 만들 수 있음 
 		 * 미초기화 페이지에 매핑되어야 할 물리 프레임의 정보를 저장하고 이를 spt에 등록한다고 추상화*/
 		/* 할 일: 페이지를 spt에 삽입한다. */
-		struct page* new_page = calloc(1, sizeof(struct page));
-		if ((type ^ VM_ANON) == VM_ANON){ // 이 부분 임시코드라 수정 필요 -> 모든 상황마다 uninit_new를 해야하는 지는 모르겠음
+		
+		if ((VM_TYPE(type)) == VM_ANON){ // 이 부분 임시코드라 수정 필요 -> 모든 상황마다 uninit_new를 해야하는 지는 모르겠음
 			uninit_new(new_page, upage, init, VM_ANON , aux, anon_initializer); 
 		}
-		else if ((type ^ VM_FILE) == VM_FILE){
+		else if (VM_TYPE(type) == VM_FILE){
 			uninit_new(new_page, upage, init, VM_FILE, aux, file_backed_initializer);
+		}
+		else{
+			free(new_page);
+			goto err;
 		}
 		new_page->rw = writable;
 		
-		spt_insert_page(spt, new_page);
+		if(spt_insert_page(spt, new_page)==false) {
+			free (new_page);
+			goto err;
+		}
+		
 		return true;
 	}
 err:
@@ -97,13 +107,15 @@ err:
 struct page *
 spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 	// struct page* page1 = (struct page*)malloc(sizeof(struct page));
-	struct page* page1 = NULL;
-	page1->va = pg_round_down(va);
-	// hash_elem
-	struct hash_elem h_elem = page1->hash_elem; 
-	struct hash_elem *finded_elem = hash_find(spt->hash_list, &h_elem);
-	if(finded_elem != NULL) page1 = hash_entry(finded_elem, struct page, hash_elem);
-	return page1;
+	struct page cur_page = {0};
+	cur_page.va = pg_round_down(va);
+
+	struct hash_elem* h_e;
+	h_e = hash_find(&spt->hash_list, &cur_page.hash_elem);
+	if(h_e != NULL){
+		return hash_entry(h_e, struct page, hash_elem);
+	}
+	return NULL;
 }
 
 /* Insert PAGE into spt with validation. */
@@ -120,9 +132,8 @@ spt_insert_page (struct supplemental_page_table *spt UNUSED, //인설트 담당
 	//인덱스 0부터 7까지 하고 key를 주소로 하면 될꺼 같은데? 
 	//주소는 VM 주소로 해야할듯? SPT 가 물리주소로 하는게 아닌거 같으니까? 
 
-	struct hash_elem h_elem = page -> hash_elem;
-	
-	struct hash_elem *elem = hash_insert(spt->hash_list, &page->hash_elem);
+	struct hash_elem *elem = hash_insert(&spt->hash_list, &page->hash_elem);
+
 	if (elem==NULL){//만약 없어서 새로 넣었다면 NULL 반환 
 		//이미 있다면 그냥 그요소를 반환
 		succ = true;
@@ -239,9 +250,9 @@ vm_handle_wp (struct page *page UNUSED) {
 
 /* Return true on success */
 bool
-vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
-		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
-	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
+vm_try_handle_fault (struct intr_frame *f, void *addr,
+		bool user, bool write, bool not_present) {
+	struct supplemental_page_table *spt = &thread_current ()->spt;
 	struct page *page = spt_find_page(spt, addr);
 	
 	// is_kernel_vddd는 KERN_BASE보다 주소값이 클 때, 주소검사
@@ -259,7 +270,7 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 
 	// write는 왜 있는지 모르겠음
 	// 새 페이지때 쓰기 권한, 읽기 전용인데 쓰면 안됨
-	if (write)
+	if (write && page->rw == false)
 		return false;
 
 	return vm_do_claim_page (page);
@@ -281,6 +292,7 @@ vm_dealloc_page (struct page *page) {
 bool
 vm_claim_page (void *va UNUSED) {
 	struct page *page = spt_find_page(&thread_current()->spt,va);
+	
 	/* TODO: Fill this function */
 	/*
 	할당할 페이지를 확보합니다 va.
@@ -329,7 +341,6 @@ vm_do_claim_page (struct page *page) {
 
 		return false;
 	}
-
 	/* TODO: Insert page table entry to map page's VA to frame's PA. */
 	// 실제 페이지 내용 로딩
 	return swap_in (page, frame->kva);
