@@ -35,8 +35,8 @@ anon_initializer (struct page *page, enum vm_type type, void *kva) {
 	/* Set up the handler */
 	// struct uninit_page *uninit_page = &page->uninit;
 	// void *aux = uninit_page->aux; 
-	// page->operations = &anon_ops;
-	// struct anon_page *anon_page = &page->anon;
+	page->operations = &anon_ops;
+	struct anon_page *anon_page = &page->anon;
 	// anon_page->aux = aux;
 	// anon_page->type = type;
 }
