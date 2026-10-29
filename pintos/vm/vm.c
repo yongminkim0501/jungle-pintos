@@ -132,9 +132,9 @@ spt_insert_page (struct supplemental_page_table *spt UNUSED, //인설트 담당
 	//인덱스 0부터 7까지 하고 key를 주소로 하면 될꺼 같은데? 
 	//주소는 VM 주소로 해야할듯? SPT 가 물리주소로 하는게 아닌거 같으니까? 
 
-	struct hash_elem *elem = hash_insert(&spt->hash_list, &page->hash_elem);
-
-	if (elem==NULL){//만약 없어서 새로 넣었다면 NULL 반환 
+	struct hash_elem h_elem = page -> hash_elem;
+	
+	if (hash_insert(spt->hash_list, &page->hash_elem)==NULL){//만약 없어서 새로 넣었다면 NULL 반환 
 		//이미 있다면 그냥 그요소를 반환
 		succ = true;
 	}
