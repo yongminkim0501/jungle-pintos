@@ -978,13 +978,11 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		v_entry -> offset = ofs;
 		v_entry -> file = file;
 	
-		
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
 					writable, lazy_load_segment, v_entry)){
 			free(v_entry);
 			return false;
 		}
-		
 		/* Advance. */
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
