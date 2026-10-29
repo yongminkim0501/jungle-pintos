@@ -236,8 +236,21 @@ vm_get_frame (void) {
 }
 
 /* Growing the stack. */
+/* addr이 더 이상 fault 주소가 아니도록 하나 이상의 
+	anonymous page를 할당해서 스택 크기를 늘립니다. 할당을 처리할 때는 
+	addr를 PGSIZE 단위로 내림 정렬해야 합니다*/
 static void
 vm_stack_growth (void *addr UNUSED) {
+	// addr까지 페이지 경게로 내림
+	void *stack_page = pg_round_down(addr);
+
+	/* VM_ANON: 파일과 연결 없는 익명 페이지 
+	 * VM_MARKER_0: 이 페이지가 "스택 페이지"라는 표시 
+	 * vm alloc page는 spt에 페이지 정보만 등록하고 실제 프레임은 아직 안 붙임 */
+	if(vm_alloc_page(VM_ANON | VM_MARKER_0, stack_page, true)){
+		// 등록한 페이지에 실제 메모리를 할당하고 페이지 테이블에 매핑
+		vm_claim_page(stack_page);
+	}
 }
 
 /* Handle the fault on write_protected page */
@@ -262,10 +275,21 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,
 		return false;
 	
 	// spt에서 찾기 	
-	if (page == NULL)
-		return false;
+	if (page == NULL){
+		/* 기준이 될 유저 스택 포인터를 고른다
+		 * true: 유저 코드 실행 중 폴트 → f->rsp가 곧 유저 rsp
+		 * false: 시스템 콜 처리 중(커널 모드) 폴트 → f->rsp는 커널 스택이라 못 씀 */
+		void *rsp = user ? (void *) f->rsp : thread_current ()->user_rsp;
 
-	// write는 왜 있는지 모르겠음
+		// 스택 확장 인정 조건
+		if(addr<USER_STACK && addr >= f->rsp - 8 && addr >= (USER_STACK - (1<<20))){
+			// 스택 페이지 추가
+			vm_stack_growth(addr);
+			return true;
+		}
+		return false;
+	}	
+
 	// 새 페이지때 쓰기 권한, 읽기 전용인데 쓰면 안됨
 	if (write && page->rw == false)
 		return false;

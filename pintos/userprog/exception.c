@@ -128,7 +128,10 @@ page_fault (struct intr_frame *f) {
 	   accessed to cause the fault.  It may point to code or to
 	   data.  It is not necessarily the address of the instruction
 	   that caused the fault (that's f->rip). */
-
+	// sel_ucseg 유저 모드를 나타내는 상수
+	if(f->cs == SEL_UCSEG)
+		thread_current()->user_rsp = f->rsp;
+			
 	fault_addr = (void *) rcr2();
 
 	/* Turn interrupts back on (they were only off so that we could
@@ -140,13 +143,13 @@ page_fault (struct intr_frame *f) {
 	write = (f->error_code & PF_W) != 0; // 0이면 읽기 중 폴트, 1이면 쓰기 중 폴트
 	user = (f->error_code & PF_U) != 0; // 0이면 커널모드 폴트, 1이면 유저 모드 폴트
 
+
 #ifdef VM
 	/* For project 3 and later. */
 	if (vm_try_handle_fault (f, fault_addr, user, write, not_present))
 		return;
 #endif
 	if (user) exit(-1);
-
 	/* Count page faults. */
 	page_fault_cnt++;
 

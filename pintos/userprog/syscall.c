@@ -55,6 +55,11 @@ syscall_init (void) {
 struct intr_frame *f_data; // 프레임을 집어 넣어야 하는데 인자 개수가 f->R.rdi 하나로 제한되어 전역 변수 선언하여 집어넣음
 void
 syscall_handler (struct intr_frame *f) {
+	// 커널 내에서의 페이지 폴트 시 rsp가 망가지는 것을 대비
+	// sel_ucseg 유저 모드를 나타내는 상수
+	if(f->cs == SEL_UCSEG)
+		thread_current()->user_rsp = f->rsp;
+
 	switch (f->R.rax) {
 		case SYS_HALT:
 			halt ();
